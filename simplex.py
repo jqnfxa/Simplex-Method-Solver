@@ -2,13 +2,24 @@ import copy
 import numpy as np
 
 
+class Info:
+    def __init__(self, row, column, table, i, j, x1, x2, optimum):
+        self.row = row.copy()
+        self.column = column.copy()
+        self.table = copy.deepcopy(table)
+        self.i = i
+        self.j = j
+        self.x1 = x1
+        self.x2 = x2
+        self.optimum = optimum
+
 class SimplexMethod:
     def __init__(self, constraints, function):
         self.n = len(constraints)
         self.m = len(constraints[0]) - 1
         self.invalid_index = 1 + max(self.n, self.m)
         self.function = function
-        self.row = ['x' + str(_) for _ in range(1, self.m)]
+        self.row = ['x' + str(_) for _ in range(1, self.m + 1)]
         self.column = ['y' + str(_) for _ in range(1, self.n + 1)]
         self.row.append('-b')
         self.column.append('f')
@@ -160,6 +171,29 @@ class SimplexMethod:
         self.table = new_table
         new_table[-1][-1] = self.f(*self.find_optimum())
 
+    def get_solution(self):
+        result = []
+        result.append(Info(sm.row, sm.column, self.table, None, None, 0, 0, 0))
+
+        is_successful = True
+        while is_successful:
+            try:
+                is_successful, i, j, e = sm.pick_element()
+            except ValueError as e:
+                result.append(None)
+                return result
+
+            if not is_successful:
+                break
+            
+            result[-1].i = i
+            result[-1].j = j
+            sm.recalculate_matrix()
+            x1, x2 = sm.find_optimum()
+            result.append(Info(sm.row, sm.column, self.table, None, None, x1, x2, sm.f(x1, x2)))
+            
+        return result
+
 # Constraints such as
 # y = a * x1 + b * x2 + c > 0
 # c = grad F(x1,x2)
@@ -174,35 +208,59 @@ class SimplexMethod:
 # y4 = [22.30, 16.20, -780.76]
 # y5 = [17.50, -3.60, -105.43]
 # c = [2.4, -1.15]
-# y1 = [-37.00, 88.70, 108.06]
-# y2 = [-45.60, 90.50, 250.87]
-# y3 = [-43.80, 64.70, 431.13]
-# y4 = [-47.80, 49.90, 787.59]
-# y5 = [-44.80, 24.60, 1374.40]
-# y6 = [-39.00, 11.20, 1553.12]
-# c = [-2.45, 0]
-y1 = [-1.00, -1.00, -1]
-c = [-1, 0]
+# y1 = [-39.00, 93.10, 113.10]
+# y2 = [-45.50, 89.90, 250.25]
+# y3 = [-45.50, 67.00, 441.35]
+# y4 = [-45.50, 47.20, 746.20]
+# y5 = [-45.50, 24.90, 1392.30]
+# y6 = [-45.50, 12.90, 1810.90]
+# y7 = [-45.50, 45.50, -45.50]
+# c = [-1, -2.45]
+# y1 = [-1.00, -1.00, -1]
+# c = [-1, 0]
+# y1 = [-45.50, 12.20, 1810.90]
+# y2 = [-44.20, 56.30, -73.19]
+# y3 = [2.50, -92.60, 3764.32]
+# c = [-1, -2.45]
+if __name__ == "__main__":
+    y1 = [-39.00, 93.10, 113.10]
+    y2 = [-45.50, 89.90, 250.25]
+    y3 = [-45.50, 67.00, 441.35]
+    y4 = [-45.50, 47.20, 746.20]
+    y5 = [-45.50, 24.90, 1392.30]
+    y6 = [-45.50, 12.90, 1810.90]
+    y7 = [45.50, -45.50, 45.50]
+    c = [-1, -2.45]
 
-sm = SimplexMethod([y1], c)
-sm.print_table()
-print()
+    sm = SimplexMethod([y1, y2, y3, y4, y5, y6, y7], c)
+    result = sm.get_solution()
+    for i in result:
+        if i is None:
+            break
+        print("\t", end='')
+        print("\t".join(i.row))
+        n = len(i.table)
+        for row in range(n):
+            print(i.column[row], end='\t')
+            print("\t".join([str(round(val, 4)) for val in i.table[row]]))
+        print(i.i, i.j, i.x1, i.x2, i.optimum)
+# sm.print_table()
+# print()
 
-is_successful = True
-i = 0
-j = 0
-element = -1
+# is_successful = True
+# i = 0
+# j = 0
+# element = -1
 
-while is_successful:
-    is_successful, i, j, e = sm.pick_element()
-    if not is_successful:
-        break
-    print(f"Разрешающий элемент `table[{i}][{j}]` = {e}")
-    sm.recalculate_matrix()
-    sm.print_table()
-    x1, x2 = sm.find_optimum()
-    print(f"Текущая точка: ({round(x1, 6)}, {round(x2, 6)}), F(x1,x2)={round(sm.f(x1, x2), 6)}")
-    print()
+# while is_successful:
+#     is_successful, i, j, e = sm.pick_element()
+#     if not is_successful:
+#     print(f"Разрешающий элемент `table[{i}][{j}]` = {e}")
+#     sm.recalculate_matrix()
+#     sm.print_table()
+#     x1, x2 = sm.find_optimum()
+#     print(f"Текущая точка: ({round(x1, 6)}, {round(x2, 6)}), F(x1,x2)={round(sm.f(x1, x2), 6)}")
+#     print()
 
-x1, x2 = sm.find_optimum()
-print(f"Решение: ({round(x1, 6)}, {round(x2, 6)}), F(x1,x2)={round(sm.f(x1, x2), 6)}")
+# x1, x2 = sm.find_optimum()
+# print(f"Решение: ({round(x1, 6)}, {round(x2, 6)}), F(x1,x2)={round(sm.f(x1, x2), 6)}")
