@@ -15,6 +15,8 @@ class SimplexApp:
         # Словарь для связи строк таблицы с линиями на графике
         self.line_map = {}
 
+        self.vector_map = {}  # Словарь для хранения векторов
+
         # Левый фрейм для таблицы
         self.left_frame = ttk.Frame(root)
         self.left_frame.grid(row=0, column=0, padx=10, pady=10, sticky="ns")
@@ -143,9 +145,15 @@ class SimplexApp:
             y_vals = [k * x_min + b, k * x_max + b]
 
             # Обрезаем линию, если она выходит за пределы по Y
-            if y_vals[0] < y_min or y_vals[1] > y_max:
-                y_vals = [y_min, y_max]
-                x_vals = [(y_min - b) / k, (y_max - b) / k]
+            if k == 0:
+                ...
+            elif y_vals[1] < y_min or y_vals[1] > y_max:
+                y_vals[1] = y_min if k < 0 else y_max
+                x_vals[1] = ((20 if k > 0 else 0) - b) / k
+            elif y_vals[0] < y_min or y_vals[0] > y_max:
+                y_vals[0] = y_min if k > 0 else y_max
+                x_vals[0] = ((20 if k < 0 else 0) - b) / k
+                
         else:  # Если линия вертикальная
             x_vals = [x1, x1]
             y_vals = [y_min, y_max]
@@ -161,10 +169,10 @@ class SimplexApp:
 
     def initialize_table(self):
         """Инициализация таблицы несколькими строками."""
-        for i in range(2):  # Добавляем 5 строк по умолчанию
+        for i in range(1):  # Добавляем 5 строк по умолчанию
             self.add_row()
 
-    def add_row(self, x1=1.0, x2=1.0, neg_b=3.0):
+    def add_row(self, x1=1.0, x2=-1.0, neg_b=3.0):
         """Добавление строки в таблицу и создание линии на графике."""
         row_name = f"y{len(self.table.get_children())}"  # Название строки
         item_id = self.table.insert("", "end", text=row_name, values=(str(x1), str(x2), str(neg_b)))
@@ -258,7 +266,8 @@ class SimplexApp:
             return
         
         values = [*map(float, values)]
-        if values[1] == 0 and values[0] == 0:
+        values[2] = -1 * values[2]
+        if values[0] == 0 and values[1] == 0:
             x_vals, y_vals = self.get_x_y_for_graph((0, 0), (0, 0))
         elif values[0] == 0:
             x_vals, y_vals = self.get_x_y_for_graph((0, values[2] / values[1]), (1, values[2] / values[1]))
@@ -270,6 +279,10 @@ class SimplexApp:
         # Обновляем линию
         line = self.line_map[item_id]
         line.set_data(x_vals, y_vals)
+
+        # Обновляем вектор
+        self.update_vector_for_row(item_id, x_vals, y_vals, values)
+
         self.canvas.draw()
 
     def delete_line_for_row(self, item_id):
@@ -280,7 +293,37 @@ class SimplexApp:
             del self.line_map[item_id]  # Удаляем из словаря
             if line == self.selected_line:
                 self.selected_line = None
-            self.canvas.draw()
+        
+        if item_id in self.vector_map:
+            vec = self.vector_map[item_id]
+            vec.remove()  # Удаляем вектор с графика
+            del self.vector_map[item_id]  # Удаляем из словаря
+
+        self.canvas.draw()
+    
+    def update_vector_for_row(self, item_id, x_vals, y_vals, values):
+        """Добавление или обновление вектора для строки таблицы."""
+        # Середина линии
+        x_mid = (x_vals[0] + x_vals[1]) / 2
+        y_mid = (y_vals[0] + y_vals[1]) / 2
+
+        # Направление вектора из x1, x2
+        x_dir, y_dir = values[0], values[1]
+
+        # Нормализуем длину вектора до 0.1 от масштаба
+        scale = 0.05 * (self.ax.get_xlim()[1] - self.ax.get_xlim()[0])
+        length = (x_dir**2 + y_dir**2)**0.5
+        if length > 0:
+            x_dir, y_dir = (x_dir / length) * scale, (y_dir / length) * scale
+
+        # Удаляем старый вектор, если он есть
+        if item_id in self.vector_map:
+            vec = self.vector_map[item_id]
+            vec.remove()
+
+        # Добавляем новый вектор
+        vec = self.ax.quiver(x_mid, y_mid, x_dir, y_dir, angles='xy', scale_units='xy', scale=1, color='b')
+        self.vector_map[item_id] = vec
     
     def on_line_click(self, event):
         """Обработка клика на линии."""
@@ -294,8 +337,20 @@ class SimplexApp:
                 break
 
         if item_id:
-            self.highlight_line(line)
-            self.highlight_row(item_id)
+            is_highlight_line = line == self.selected_line
+            self.highlight_line(line)  # Выделяем линию
+            self.highlight_row(item_id)  # Выделяем строку таблицы
+            
+            if not is_highlight_line:
+                return
+
+            # Меняем все значения в строке на отрицательные
+            values = self.table.item(item_id)["values"]
+            new_values = [-float(value) for value in values]  # Меняем на отрицательные значения
+            self.table.item(item_id, values=new_values)  # Обновляем строку в таблице
+
+            # Обновляем линию на графике с новыми значениями
+            self.update_line_for_row(item_id, new_values)
     
     def on_table_select(self, event):
         """Обработка выделения строки в таблице."""
@@ -314,14 +369,24 @@ class SimplexApp:
                 self.highlight_line(line)
 
     def highlight_line(self, line):
-        """Выделение линии зелёным цветом."""
+        """Выделение линии и связанного с ней вектора."""
         # Сбрасываем выделение текущей линии
         if self.selected_line:
             self.selected_line.set_color("b")
+            # Сбрасываем цвет для связанного вектора
+            for item_id, existing_line in self.line_map.items():
+                if existing_line == self.selected_line and item_id in self.vector_map:
+                    self.vector_map[item_id].set_color("b")
 
         # Устанавливаем новую выделенную линию
         self.selected_line = line
         line.set_color("g")
+        
+        # Выделяем цветом связанный вектор
+        for item_id, existing_line in self.line_map.items():
+            if existing_line == line and item_id in self.vector_map:
+                self.vector_map[item_id].set_color("g")
+        
         self.canvas.draw()
 
     def highlight_row(self, item_id):
@@ -378,7 +443,7 @@ class SimplexApp:
         if k != k:
             return
 
-        self.add_row(k, -1, -b)
+        self.add_row(k, -1, b)
         self.line_start = None
         self.line_end = None
 
