@@ -1,17 +1,17 @@
 import copy
-
 import numpy as np
-import plotly.graph_objects as go
 
 
 class SimplexMethod:
     def __init__(self, constraints, function):
         self.n = len(constraints)
-        self.m = 3
+        self.m = len(constraints[0]) - 1
+        self.invalid_index = 1 + max(self.n, self.m)
         self.function = function
-        self.row = ['x1', 'x2', '-b']
+        self.row = ['x' + str(_) for _ in range(1, self.m)]
         self.column = ['y' + str(_) for _ in range(1, self.n + 1)]
-        self.column.append('c')
+        self.row.append('-b')
+        self.column.append('f')
 
         # add constraints
         self.table = [constraint for constraint in constraints]
@@ -35,86 +35,97 @@ class SimplexMethod:
             for row in range(len(self.column)):
                 if self.column[row] == s:
                     return row
-            return len(self.column)
+            return self.invalid_index
 
         x1_i = index_of('x1')
         x2_i = index_of('x2')
         x1 = 0
         x2 = 0
 
-        if x1_i != len(self.column):
+        if x1_i != self.invalid_index:
             x1 = self.table[x1_i][-1]
-        if x2_i != len(self.column):
+        if x2_i != self.invalid_index:
             x2 = self.table[x2_i][-1]
 
         return x1, x2
 
     def pick_element(self) -> (bool, int, int, float):
         # find negative in `-b` column
-        target_row = self.n
+        target_row = self.invalid_index
         for idx in range(self.n):
             if self.table[idx][-1] < 0:
                 target_row = idx
                 break
 
-        # if no negative element in `-b` column then search negative in row `c`
-        if target_row == self.n:
-            target_column = self.m
-            for idx in range(self.m - 1):
-                if self.table[-1][idx] < 0:
-                    target_column = idx
+        # if negative element in `-b` exists then seach for non negative element in row
+        if target_row != self.invalid_index:
+            # find non-negative element in row
+            target_column = self.invalid_index
+            for column in range(self.m):
+                if self.table[target_row][column] > 0:
+                    target_column = column
                     break
 
-            # no negative element in `c` column, optimum already found
-            if target_column == self.m:
-                x1, x2 = self.find_optimum()
-                return False, x1, x2, self.f(x1, x2)
+            # logic error?
+            if target_column == self.invalid_index:
+                raise ValueError("incorrect system")
 
-            # otherwise find max negative num:
-            # `m` where (-b_m) / (table[m][neg_index] -> max < 0
-            target_row = self.n
-            min_val = self.table[0][-1] / self.table[0][target_column]
-
-            for row in range(self.n):
-                if self.table[row][target_column] == 0:
-                    continue
-                val = self.table[row][-1] / self.table[row][target_column]
-
-                if val == 0 and min_val > 0:
-                    min_val = val
-                    target_row = row
-                    continue
-
-                if val < 0 <= min_val:
-                    min_val = val
-                    target_row = row
-                    continue
-
-                if 0 > val > min_val:
-                    min_val = val
-                    target_row = row
-                    continue
-            if min_val > 0:
-                raise "symplex method does not converge"
             return True, target_row, target_column, self.table[target_row][target_column]
 
-        # find non-negative element in row
-        target_column = self.m
-        for column in range(self.m - 1):
-            if self.table[target_row][column] > 0:
-                target_column = column
+        # if no negative element in `-b` column then search negative in element row `c`
+        target_column = self.invalid_index
+        for idx in range(self.m):
+            if self.table[-1][idx] < 0:
+                target_column = idx
                 break
 
-        # logic error?
-        if target_column == self.m:
-            raise "incorrect system?"
+        # if no negative element in `c` column, then optimum already found
+        if target_column == self.invalid_index:
+            x1, x2 = self.find_optimum()
+            return False, x1, x2, self.f(x1, x2)
+
+        # otherwise find max negative num:
+        # `m` where (-b_m) / (table[m][neg_index]) -> max < 0
+        target_row = self.invalid_index
+        first_try = True
+        min_val = 1
+
+        for row in range(self.n):
+            if self.table[row][target_column] == 0:
+                continue
+
+            val = self.table[row][-1] / self.table[row][target_column]
+
+            if first_try:
+                min_val = val
+                target_row = row
+                first_try = False
+                continue
+
+            if val == 0 and min_val > 0:
+                min_val = val
+                target_row = row
+                continue
+
+            if val < 0 <= min_val:
+                min_val = val
+                target_row = row
+                continue
+
+            if min_val <= val < 0:
+                min_val = val
+                target_row = row
+                continue
+
+        if first_try or min_val > 0:
+            raise ValueError("simplex method does not converge")
 
         return True, target_row, target_column, self.table[target_row][target_column]
 
     def recalculate_matrix(self):
         _is_successful, r, c, _ = sm.pick_element()
 
-        if not is_successful:
+        if not _is_successful:
             return
 
         new_table = copy.deepcopy(self.table)
@@ -131,7 +142,7 @@ class SimplexMethod:
             new_table[row][c] /= self.table[r][c]
 
         # step 3: inverse picked element
-        new_table[r][c] = 1 / self.table[r][c]
+        new_table[r][c] = 1.0 / self.table[r][c]
 
         # step 4: recalculate matrix
         for row in range(len(new_table)):
@@ -149,16 +160,31 @@ class SimplexMethod:
         self.table = new_table
         new_table[-1][-1] = self.f(*self.find_optimum())
 
-
 # Constraints such as
 # y = a * x1 + b * x2 + c > 0
 # c = grad F(x1,x2)
-y1 = [1, 1, -2]
-y2 = [-1, 1, 2]
-y3 = [0, -1, 2]
+# y1 = [-39.70, -96.00, 4060.80]
+# y2 = [-45.50, 45.30, 600.60]
+# y3 = [45.50, -7.40, -54.60]
+# y4 = [24.20, 45.10, -1091.42]
+# c = [-1, -1]
+# y1 = [12.50, -26.60, 726.78]
+# y2 = [-26.40, -18.40, 1814.48]
+# y3 = [-6, 41.80, -81.00]
+# y4 = [22.30, 16.20, -780.76]
+# y5 = [17.50, -3.60, -105.43]
+# c = [2.4, -1.15]
+# y1 = [-37.00, 88.70, 108.06]
+# y2 = [-45.60, 90.50, 250.87]
+# y3 = [-43.80, 64.70, 431.13]
+# y4 = [-47.80, 49.90, 787.59]
+# y5 = [-44.80, 24.60, 1374.40]
+# y6 = [-39.00, 11.20, 1553.12]
+# c = [-2.45, 0]
+y1 = [-1.00, -1.00, -1]
 c = [-1, 0]
 
-sm = SimplexMethod([y1, y2, y3], c)
+sm = SimplexMethod([y1], c)
 sm.print_table()
 print()
 
