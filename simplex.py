@@ -2,6 +2,14 @@ import copy
 import numpy as np
 
 
+class Error:
+    def __init__(self, error_string):
+        self.error_string = error_string
+    
+    def __str__(self):
+        return self.error_string
+
+
 class Info:
     def __init__(self, row, column, table, i, j, x1, x2, optimum):
         self.row = row.copy()
@@ -180,7 +188,7 @@ class SimplexMethod:
             try:
                 is_successful, i, j, e = sm.pick_element()
             except ValueError as e:
-                result.append(None)
+                result.append(Error(str(e)))
                 return result
 
             if not is_successful:
@@ -191,7 +199,7 @@ class SimplexMethod:
             sm.recalculate_matrix()
             x1, x2 = sm.find_optimum()
             result.append(Info(sm.row, sm.column, self.table, None, None, x1, x2, sm.f(x1, x2)))
-            
+
         return result
 
 # Constraints such as
@@ -223,26 +231,26 @@ class SimplexMethod:
 # y3 = [2.50, -92.60, 3764.32]
 # c = [-1, -2.45]
 if __name__ == "__main__":
-    y1 = [-39.00, 93.10, 113.10]
-    y2 = [-45.50, 89.90, 250.25]
-    y3 = [-45.50, 67.00, 441.35]
-    y4 = [-45.50, 47.20, 746.20]
-    y5 = [-45.50, 24.90, 1392.30]
-    y6 = [-45.50, 12.90, 1810.90]
-    y7 = [45.50, -45.50, 45.50]
-    c = [-1, -2.45]
+    # y1 = [-9.30, 0.30, 47.37]
+    # y2 = [2.30, 11.70, -55.85]
+    # y3 = [-5.80, -8.00, 113.48]
+    # y4 = [-1.10, 9.20, -17.13]
+    # c = [-3.40, -1.05]
+    y1 = [1, 0, -2]
+    c = [-1, 0]
 
-    sm = SimplexMethod([y1, y2, y3, y4, y5, y6, y7], c)
+    sm = SimplexMethod([y1], c)
     result = sm.get_solution()
     for i in result:
-        if i is None:
+        if type(i) == Error:
+            print(i)
             break
-        print("\t", end='')
+        print("\n\n")
         print("\t".join(i.row))
         n = len(i.table)
         for row in range(n):
             print(i.column[row], end='\t')
-            print("\t".join([str(round(val, 4)) for val in i.table[row]]))
+            print("\t".join([str(round(val, 9)) for val in i.table[row]]))
         print(i.i, i.j, i.x1, i.x2, i.optimum)
 # sm.print_table()
 # print()
