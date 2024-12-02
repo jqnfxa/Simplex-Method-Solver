@@ -181,12 +181,12 @@ class SimplexMethod:
 
     def get_solution(self):
         result = []
-        result.append(Info(sm.row, sm.column, self.table, None, None, 0, 0, 0))
+        result.append(Info(self.row, self.column, self.table, None, None, 0, 0, 0))
 
         is_successful = True
         while is_successful:
             try:
-                is_successful, i, j, e = sm.pick_element()
+                is_successful, i, j, e = self.pick_element()
             except ValueError as e:
                 result.append(Error(str(e)))
                 return result
@@ -196,9 +196,9 @@ class SimplexMethod:
             
             result[-1].i = i
             result[-1].j = j
-            sm.recalculate_matrix()
-            x1, x2 = sm.find_optimum()
-            result.append(Info(sm.row, sm.column, self.table, None, None, x1, x2, sm.f(x1, x2)))
+            self.recalculate_matrix()
+            x1, x2 = self.find_optimum()
+            result.append(Info(self.row, self.column, self.table, None, None, x1, x2, self.f(x1, x2)))
 
         return result
 
@@ -236,10 +236,14 @@ if __name__ == "__main__":
     # y3 = [-5.80, -8.00, 113.48]
     # y4 = [-1.10, 9.20, -17.13]
     # c = [-3.40, -1.05]
-    y1 = [1, 0, -2]
+    # y1 = [1, 0, -2]
+    # c = [-1, 0]
+    y1 = [1, 1, -2]
+    y2 = [-1, 1, 2]
+    y3 = [0, -1, 2]
     c = [-1, 0]
 
-    sm = SimplexMethod([y1], c)
+    sm = SimplexMethod([y1, y2, y3], c)
     result = sm.get_solution()
     for i in result:
         if type(i) == Error:
