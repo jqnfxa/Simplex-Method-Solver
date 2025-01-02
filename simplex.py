@@ -1,11 +1,10 @@
 import copy
-import numpy as np
 
 
 class Error:
     def __init__(self, error_string):
         self.error_string = error_string
-    
+
     def __str__(self):
         return self.error_string
 
@@ -20,6 +19,7 @@ class Info:
         self.x1 = x1
         self.x2 = x2
         self.optimum = optimum
+
 
 class SimplexMethod:
     def __init__(self, constraints, function):
@@ -37,7 +37,6 @@ class SimplexMethod:
 
         # add function
         self.table.append(function)
-        self.table[-1].append(0)
 
     def print_table(self):
         print("\t", end='')
@@ -76,7 +75,7 @@ class SimplexMethod:
                 target_row = idx
                 break
 
-        # if negative element in `-b` exists then seach for non negative element in row
+        # if negative element in `-b` exists then search for non-negative element in row
         if target_row != self.invalid_index:
             # find non-negative element in row
             target_column = self.invalid_index
@@ -91,7 +90,7 @@ class SimplexMethod:
 
             return True, target_row, target_column, self.table[target_row][target_column]
 
-        # if no negative element in `-b` column then search negative in element row `c`
+        # if no negative element in `-b` column then search negative element in row `c`
         target_column = self.invalid_index
         for idx in range(self.m):
             if self.table[-1][idx] < 0:
@@ -142,7 +141,7 @@ class SimplexMethod:
         return True, target_row, target_column, self.table[target_row][target_column]
 
     def recalculate_matrix(self):
-        _is_successful, r, c, _ = sm.pick_element()
+        _is_successful, r, c, _ = self.pick_element()
 
         if not _is_successful:
             return
@@ -154,30 +153,28 @@ class SimplexMethod:
 
         # step 1: divide row with picked element by `-e`
         for column in range(len(new_table[r])):
-            new_table[r][column] /= -self.table[r][c]
+            new_table[r][column] = -self.table[r][column] / self.table[r][c]
 
         # step 2: divide column with picked element by `e`
-        for row in range(len(new_table)):
-            new_table[row][c] /= self.table[r][c]
+        for rw in range(len(new_table)):
+            new_table[rw][c] = self.table[rw][c] / self.table[r][c]
 
         # step 3: inverse picked element
         new_table[r][c] = 1.0 / self.table[r][c]
 
         # step 4: recalculate matrix
-        for row in range(len(new_table)):
-            if row == r:
+        for rw in range(len(new_table)):
+            if rw == r:
                 continue
-            for column in range(len(new_table[row])):
+            for column in range(len(new_table[rw])):
                 if column == c:
                     continue
 
-                new_table[row][column] = (
-                        (self.table[row][column] * self.table[r][c] -
-                         self.table[r][column] * self.table[row][c]) / self.table[r][c])
+                new_table[rw][column] = (
+                        (self.table[rw][column] * self.table[r][c] -
+                         self.table[r][column] * self.table[rw][c]) / self.table[r][c])
 
-        # recalculate F(optimum)
         self.table = new_table
-        new_table[-1][-1] = self.f(*self.find_optimum())
 
     def get_solution(self):
         result = []
@@ -193,14 +190,14 @@ class SimplexMethod:
 
             if not is_successful:
                 break
-            
+
             result[-1].i = i
             result[-1].j = j
             self.recalculate_matrix()
             x1, x2 = self.find_optimum()
             result.append(Info(self.row, self.column, self.table, None, None, x1, x2, self.f(x1, x2)))
-
         return result
+
 
 # Constraints such as
 # y = a * x1 + b * x2 + c > 0
@@ -231,18 +228,15 @@ class SimplexMethod:
 # y3 = [2.50, -92.60, 3764.32]
 # c = [-1, -2.45]
 if __name__ == "__main__":
-    # y1 = [-9.30, 0.30, 47.37]
-    # y2 = [2.30, 11.70, -55.85]
-    # y3 = [-5.80, -8.00, 113.48]
-    # y4 = [-1.10, 9.20, -17.13]
-    # c = [-3.40, -1.05]
-    # y1 = [1, 0, -2]
-    # c = [-1, 0]
     y1 = [1, 1, -2]
-    y2 = [-1, 1, 2]
-    y3 = [0, -1, 2]
-    c = [-1, 0]
-
+    y2 = [-1, 1, 1.5]
+    y3 = [1, -2, 4]
+    c = [-1, -1]
+    # # y1 = [1, 1, -2]
+    # # y2 = [-1, 1, 2]
+    # # y3 = [0, -1, 2]
+    # # c = [-1, 0]
+    #
     sm = SimplexMethod([y1, y2, y3], c)
     result = sm.get_solution()
     for i in result:
