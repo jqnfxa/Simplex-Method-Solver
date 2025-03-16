@@ -20,7 +20,7 @@ pip install -r requirements.txt
 
 # create the executable (with --noconsole)
 echo "creating executable..."
-pyinstaller --onefile --noconsole main.py
+pyinstaller --onefile --noconsole src/main.py --name simplex
 
 # deactivate the virtual environment (optional, but good practice)
 echo "Deactivating virtual environment..."
