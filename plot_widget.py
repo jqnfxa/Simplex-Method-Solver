@@ -1,6 +1,4 @@
 import math
-import tkinter as tk
-import matplotlib.pyplot as plt
 from PyQt5.QtWidgets import QVBoxLayout, QWidget
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import numpy as np
@@ -9,7 +7,7 @@ import time
 from matplotlib.figure import Figure
 from matplotlib.ticker import MultipleLocator
 
-from atom import Atom
+from atom import Atom, LineEntry
 from equations import line_to_table_row, table_row_to_vector, shrink_line
 from structs import ProgramState, Line, Point
 
@@ -34,7 +32,7 @@ def is_point_on_point(x, y, point: Point, tolerance=0.2):
     return distance_between_points(Point(x, y), Point(point.x, point.y)) < tolerance
 
 
-def gradient_point(line: Line) -> Point:
+def gradient_point(line: Line, scale=1.0) -> Point:
     x1, y1 = line.begin
     x2, y2 = line.end
     mid_x = (x1 + x2) / 2
@@ -47,25 +45,27 @@ def gradient_point(line: Line) -> Point:
     if norm_factor < 1e-4:
         norm_factor = 1
 
-    return Point(mid_x -dy / norm_factor, mid_y + dx / norm_factor)
+    return Point(mid_x - dy / norm_factor * scale, mid_y + dx / norm_factor * scale)
 
 
 class PlotWidget(QWidget):
     def __init__(self, atom: Atom):
         super().__init__()
+        self.selected_gradient = False
+        self.gradient_color = 'r'
         self.__atom = atom
 
         self.xmul = 0.1
         self.ymul = 0.1
 
-        self.figure = Figure(dpi=200)
+        self.figure = Figure(dpi=300)
         self.canvas = FigureCanvas(self.figure)
         self.ax = self.figure.add_subplot(111)
         self.update_grid()
 
-        self.canvas.mpl_connect('button_press_event', self.on_click)
-        self.canvas.mpl_connect('motion_notify_event', self.on_drag)
-        self.canvas.mpl_connect('button_release_event', self.on_release)
+        self.canvas.mpl_connect('button_press_event', self.on_click)  # type: ignore
+        self.canvas.mpl_connect('motion_notify_event', self.on_drag)  # type: ignore
+        self.canvas.mpl_connect('button_release_event', self.on_release)  # type: ignore
 
         layout = QVBoxLayout()
         layout.addWidget(self.canvas)
@@ -82,25 +82,28 @@ class PlotWidget(QWidget):
         self.last_click_time = 0
 
         # delay in seconds for double-click detection
-        self.double_click_delay = 0.3
+        self.double_click_delay = 0.25
 
         # tolerance to determine if points are too close
-        self.drag_tolerance = 0.1
+        self.drag_tolerance = 0.5
 
     def update_grid(self):
-        self.ax.set_xlim(0, self.__atom.lims[0])
-        self.ax.set_ylim(0, self.__atom.lims[1])
+        self.ax.set_xlim(0, self.__atom.lim)
+        self.ax.set_ylim(0, self.__atom.lim)
         self.ax.set_aspect('equal')
         self.ax.grid(True)
 
         # set major ticks
-        self.ax.xaxis.set_major_locator(MultipleLocator(self.__atom.lims[0] * self.xmul))
-        self.ax.yaxis.set_major_locator(MultipleLocator(self.__atom.lims[1] * self.ymul))
+        self.ax.xaxis.set_major_locator(MultipleLocator(self.__atom.lim * self.xmul))
+        self.ax.yaxis.set_major_locator(MultipleLocator(self.__atom.lim * self.ymul))
 
         # set minor ticks
-        self.ax.xaxis.set_minor_locator(MultipleLocator(self.__atom.lims[0] * self.xmul / 2))
-        self.ax.yaxis.set_minor_locator(MultipleLocator(self.__atom.lims[1] * self.ymul / 2))
+        self.ax.xaxis.set_minor_locator(MultipleLocator(self.__atom.lim * self.xmul / 2))
+        self.ax.yaxis.set_minor_locator(MultipleLocator(self.__atom.lim * self.ymul / 2))
         self.ax.grid(True, which='both')
+
+    def scale(self):
+        return self.__atom.lim / 10
 
     def update_canvas(self):
         self.update_lines()
@@ -127,10 +130,13 @@ class PlotWidget(QWidget):
             self.first_point = None
             self.temp_line = None
             self.__atom.lines.pop(idx)
-            self.__atom.set_lines(self.__atom.lines)
+            self.__atom.notify_observers()
 
     def on_left_mouse_press(self, event):
         if self.__atom.state != ProgramState.Modification:
+            return
+
+        if self.selected_gradient:
             return
 
         current_time = time.time()
@@ -149,11 +155,11 @@ class PlotWidget(QWidget):
             self.dragging_point = None
 
             for i in range(len(self.__atom.lines)):
-                line: Line = self.__atom.lines[i][-1]
-                if is_point_on_point(event.xdata, event.ydata, line.begin):
+                line: Line = self.__atom.lines[i].line
+                if is_point_on_point(event.xdata, event.ydata, line.begin, tolerance=0.2 * self.scale()):
                     self.dragging_point = 0
                     self.drag_start_point = (event.xdata, event.ydata)
-                if is_point_on_point(event.xdata, event.ydata, line.end):
+                if is_point_on_point(event.xdata, event.ydata, line.end, tolerance=0.2 * self.scale()):
                     self.dragging_point = 1
                     self.drag_start_point = (event.xdata, event.ydata)
 
@@ -163,7 +169,7 @@ class PlotWidget(QWidget):
             if self.dragging_point is None:
                 # check if we are clicking on the line itself to drag the entire line
                 for i in range(len(self.__atom.lines)):
-                    if is_point_on_line(event.xdata, event.ydata, self.__atom.lines[i][-1]):
+                    if is_point_on_line(event.xdata, event.ydata, self.__atom.lines[i].line, tolerance=0.1 * self.scale()):
                         self.selected_line = i
                         self.dragging_line = i
                         self.drag_start_point = (event.xdata, event.ydata)
@@ -178,7 +184,10 @@ class PlotWidget(QWidget):
         if self.__atom.state != ProgramState.Modification:
             return
 
-        if not self.modifying:
+        if self.selected_gradient:
+            self.selected_gradient = False
+            self.gradient_color = 'r'
+            self.__atom.notify_observers()
             return
 
         if self.selected_line is not None:
@@ -190,18 +199,19 @@ class PlotWidget(QWidget):
         self.modifying = False
         self.first_point = None
         self.temp_line = None
+        self.colors = ['b'] * len(self.__atom.lines)
 
         for i in range(len(self.__atom.lines)):
-            self.__atom.lines[i][:3] = line_to_table_row(self.__atom.lines[i][-1], 2)
+            self.__atom.lines[i].coeffs = list(map(float, line_to_table_row(self.__atom.lines[i].line, 2)))
         for i in range(len(self.__atom.lines)):
-            if self.__atom.lines[i][-1].begin.x < 0 or self.__atom.lines[i][-1].begin.x > self.__atom.lims[0] or \
-                    self.__atom.lines[i][-1].begin.y < 0 or self.__atom.lines[i][-1].begin.y > self.__atom.lims[1] or \
-                    self.__atom.lines[i][-1].end.x < 0 or self.__atom.lines[i][-1].end.x > self.__atom.lims[0] or \
-                    self.__atom.lines[i][-1].end.y < 0 or self.__atom.lines[i][-1].end.y > self.__atom.lims[1]:
-                self.__atom.lines[i][-1] = shrink_line(table_row_to_vector(*self.__atom.lines[i][:3], self.__atom.lims))
+            if self.__atom.lines[i].line.begin.x < 0 or self.__atom.lines[i].line.begin.x > self.__atom.lim or \
+                    self.__atom.lines[i].line.begin.y < 0 or self.__atom.lines[i].line.begin.y > self.__atom.lim or \
+                    self.__atom.lines[i].line.end.x < 0 or self.__atom.lines[i].line.end.x > self.__atom.lim or \
+                    self.__atom.lines[i].line.end.y < 0 or self.__atom.lines[i].line.end.y > self.__atom.lim:
+                self.__atom.lines[i].line = shrink_line(table_row_to_vector(*self.__atom.lines[i].coeffs, self.__atom.lim))
 
-        self.update_lines()
-        self.__atom.set_lines(self.__atom.lines)
+        # call update
+        self.__atom.notify_observers()
 
     def on_click(self, event):
         if self.__atom.state != ProgramState.Modification:
@@ -219,11 +229,28 @@ class PlotWidget(QWidget):
         if self.__atom.state != ProgramState.Modification:
             return
 
+        # check if double-click is on the gradient vector
+        x0 = self.__atom.lim / 2
+        y0 = self.__atom.lim / 2
+        grad_x, grad_y = self.__atom.grad[:-1]
+        norm_factor = math.sqrt(grad_x * grad_x + grad_y * grad_y)
+        if norm_factor < 1e-4:
+            norm_factor = 1
+        dir_x = grad_x / norm_factor * 1.5 * self.scale()
+        dir_y = grad_y / norm_factor * 1.5 * self.scale()
+        gradient_end_point = Point(x0 + dir_x, y0 + dir_y)
+
+        if is_point_on_point(event.xdata, event.ydata, gradient_end_point, tolerance=0.2 * self.scale()):
+            self.selected_gradient = True
+            self.gradient_color = 'g'
+            self.update_lines()
+            return
+
         self.modifying = False
         for i in range(len(self.__atom.lines)):
             # update selected line if double click detected
-            current_line: Line = self.__atom.lines[i][-1]
-            if is_point_on_line(event.xdata, event.ydata, current_line):
+            current_line: Line = self.__atom.lines[i].line
+            if is_point_on_line(event.xdata, event.ydata, current_line, tolerance=0.2 * self.scale()):
                 if self.selected_line != i:
                     if self.selected_line:
                         self.colors[self.selected_line] = 'b'
@@ -234,14 +261,13 @@ class PlotWidget(QWidget):
                 return
 
             # update gradient if clicked
-            if is_point_on_point(event.xdata, event.ydata, gradient_point(current_line)):
-                self.__atom.lines[i][-1] = Line(
-                    self.__atom.lines[i][-1].end,
-                    self.__atom.lines[i][-1].begin
+            if is_point_on_point(event.xdata, event.ydata, gradient_point(current_line, self.scale()), tolerance=0.2 * self.scale()):
+                self.__atom.lines[i].line = Line(
+                    self.__atom.lines[i].line.end,
+                    self.__atom.lines[i].line.begin
                 )
-                self.__atom.lines[i][:3] = line_to_table_row(self.__atom.lines[i][-1], 2)
-                self.__atom.set_lines(self.__atom.lines)
-                self.update_lines()
+                self.__atom.lines[i].coeffs = list(map(float, line_to_table_row(self.__atom.lines[i].line, 2)))
+                self.__atom.notify_observers()
                 return
 
     def on_drag(self, event):
@@ -257,6 +283,16 @@ class PlotWidget(QWidget):
             self.modifying = False
             self.first_point = None
             self.temp_line = None
+            if self.selected_gradient:
+                self.selected_gradient = False
+                self.gradient_color = 'r'
+            self.update_lines()
+            return
+
+        if self.selected_gradient:
+            dx = round(event.xdata - self.__atom.lim / 2, 2)
+            dy = round(event.ydata - self.__atom.lim / 2, 2)
+            self.__atom.grad = [dx, dy, 0]
             self.update_lines()
             return
 
@@ -266,19 +302,19 @@ class PlotWidget(QWidget):
             dy = event.ydata - self.drag_start_point[1]
 
             if self.dragging_point == 0:
-                self.__atom.lines[self.selected_line][-1] = Line(
+                self.__atom.lines[self.selected_line].line = Line(
                     Point(
-                        self.__atom.lines[self.selected_line][-1].begin.x + dx,
-                        self.__atom.lines[self.selected_line][-1].begin.y + dy
+                        self.__atom.lines[self.selected_line].line.begin.x + dx,
+                        self.__atom.lines[self.selected_line].line.begin.y + dy
                     ),
-                    self.__atom.lines[self.selected_line][-1].end
+                    self.__atom.lines[self.selected_line].line.end,
                 )
             elif self.dragging_point == 1:
-                self.__atom.lines[self.selected_line][-1] = Line(
-                    self.__atom.lines[self.selected_line][-1].begin,
+                self.__atom.lines[self.selected_line].line = Line(
+                    self.__atom.lines[self.selected_line].line.begin,
                     Point(
-                        self.__atom.lines[self.selected_line][-1].end.x + dx,
-                        self.__atom.lines[self.selected_line][-1].end.y + dy
+                        self.__atom.lines[self.selected_line].line.end.x + dx,
+                        self.__atom.lines[self.selected_line].line.end.y + dy
                     )
                 )
             self.drag_start_point = (event.xdata, event.ydata)
@@ -287,14 +323,14 @@ class PlotWidget(QWidget):
             # dragging a line
             dx = event.xdata - self.drag_start_point[0]
             dy = event.ydata - self.drag_start_point[1]
-            self.__atom.lines[self.selected_line][-1] = Line(
+            self.__atom.lines[self.selected_line].line = Line(
                 Point(
-                    self.__atom.lines[self.selected_line][-1].begin.x + dx,
-                    self.__atom.lines[self.selected_line][-1].begin.y + dy
+                    self.__atom.lines[self.selected_line].line.begin.x + dx,
+                    self.__atom.lines[self.selected_line].line.begin.y + dy
                 ),
                 Point(
-                    self.__atom.lines[self.selected_line][-1].end.x + dx,
-                    self.__atom.lines[self.selected_line][-1].end.y + dy
+                    self.__atom.lines[self.selected_line].line.end.x + dx,
+                    self.__atom.lines[self.selected_line].line.end.y + dy
                 )
             )
             self.drag_start_point = (event.xdata, event.ydata)
@@ -316,7 +352,14 @@ class PlotWidget(QWidget):
             self.modifying = False
             self.first_point = None
             self.temp_line = None
+            if self.selected_gradient:
+                self.selected_gradient = False
+                self.gradient_color = 'r'
+            self.colors = ['b'] * len(self.__atom.lines)
             self.update_lines()
+            return
+
+        if self.selected_gradient:
             return
 
         if self.dragging_point is not None and self.selected_line is not None:
@@ -343,35 +386,44 @@ class PlotWidget(QWidget):
 
             line = Line(self.first_point, second_point)
             x1, x2, b = line_to_table_row(line, 2)
-            new_lines = self.__atom.lines
-            new_lines.append([x1, x2, b, line])
-            self.__atom.set_lines(new_lines)
+            self.__atom.lines.append(LineEntry(x1, x2, b, line))
             self.colors = ['b'] * len(self.__atom.lines)
             self.first_point = None
-            self.update_lines()
+            self.__atom.notify_observers()
 
-    def highlight_points(self, line):
-        self.ax.plot(line.begin.x, line.begin.y, 'ro')
-        self.ax.plot(line.end.x, line.end.y, 'ro')
+    def highlight_points(self, line, markersize=3):
+        self.ax.plot(line.begin.x, line.begin.y, 'ro', markersize=markersize)
+        self.ax.plot(line.end.x, line.end.y, 'ro', markersize=markersize)
 
     def draw_lines(self, lines):
-        self.ax.clear()
         self.update_grid()
 
         for line in lines:
             line_original = line
             x1, x2, b = map(float, line_to_table_row(line_original, 2))
-            line = table_row_to_vector(x1, x2, b, self.__atom.lims)
+            line = table_row_to_vector(x1, x2, b, self.__atom.lim)
+
             self.ax.plot([line_original.begin.x, line_original.end.x], [line_original.begin.y, line_original.end.y], color='b')
             self.ax.plot([line.begin.x, line.end.x], [line.begin.y, line.end.y], 'b-')
             self.draw_gradient(line_original)
 
         self.canvas.draw()
 
-    def draw_point(self, x, y):
+    def draw_point(self, x, y, markersize=3):
+        self.ax.plot(x, y, 'rs', markersize=markersize)
+
+    def draw_vector(self, x, y):
         self.update_grid()
-        self.ax.plot(x, y, 'rs')
-        self.canvas.draw()
+        norm_factor = math.sqrt(x * x + y * y)
+        if norm_factor < 1e-4:
+            norm_factor = 1
+
+        dir_x = x / norm_factor * 1.5 * self.scale()
+        dir_y = y / norm_factor * 1.5 * self.scale()
+        x0 = self.__atom.lim / 2
+        y0 = self.__atom.lim / 2
+
+        self.ax.arrow(x0, y0, dir_x, dir_y, head_width=0.2 * self.scale(), head_length=0.1 * self.scale(), fc=self.gradient_color, ec=self.gradient_color, zorder=2)
 
     def update_lines(self):
         self.ax.clear()
@@ -381,18 +433,20 @@ class PlotWidget(QWidget):
             self.colors = ['b'] * len(self.__atom.lines)
 
         for i in range(len(self.__atom.lines)):
-            line = self.__atom.lines[i][-1]
+            line = self.__atom.lines[i].line
             x1, x2, b = map(float, line_to_table_row(line, 2))
-            line = table_row_to_vector(x1, x2, b, self.__atom.lims)
+            linev = table_row_to_vector(x1, x2, b, self.__atom.lim)
 
-            self.ax.plot([line.begin.x, line.end.x], [line.begin.y, line.end.y], color=self.colors[i])
-            self.highlight_points(self.__atom.lines[i][-1])
-            self.draw_gradient(self.__atom.lines[i][-1])
+            self.ax.plot([linev.begin.x, linev.end.x], [linev.begin.y, linev.end.y], color=self.colors[i], lw=1)
+            self.ax.plot([line.begin.x, line.end.x], [line.begin.y, line.end.y], color=self.colors[i], lw=2)
+            self.highlight_points(line)
+            self.draw_gradient(line)
 
         if self.temp_line is not None:
             line = self.temp_line
             self.ax.plot([line.begin.x, line.end.x], [line.begin.y, line.end.y], color='r')
 
+        self.draw_vector(*self.__atom.grad[:-1])
         self.canvas.draw()
 
     def draw_gradient(self, line):
@@ -405,12 +459,11 @@ class PlotWidget(QWidget):
         dy = y2 - y1
 
         norm_factor = math.sqrt(dx * dx + dy * dy)
-        if norm_factor < 1e-4:
+        if norm_factor < 1e-6:
             norm_factor = 1
 
-        dir_x = -dy / norm_factor
-        dir_y = dx / norm_factor
+        dir_x = -dy / norm_factor * self.scale()
+        dir_y = dx / norm_factor * self.scale()
 
         # draw the gradient arrow
-        self.ax.arrow(mid_x, mid_y, dir_x, dir_y, head_width=0.12, head_length=0.1, fc='r', ec='r')
-        self.ax.plot(*gradient_point(line), 'go')
+        self.ax.arrow(mid_x, mid_y, dir_x, dir_y, head_width=0.12 * self.scale(), head_length=0.1 * self.scale(), fc='r', ec='r', zorder=2)

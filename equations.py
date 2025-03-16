@@ -8,16 +8,10 @@ def line_to_table_row(line: Line, rounding=4):
     # vertical line
     if line.is_vertical():
         x1, x2, b = 1, 0, round(-line.begin.x, rounding)
-        if line.end.y > line.begin.y:
-            x1 *= -1
-            b *= -1
 
     # horizontal line
     elif line.is_horizontal():
         x1, x2, b = 0, 1, round(-line.begin.y, rounding)
-        if line.end.x > line.begin.x:
-            x2 *= -1
-            b *= -1
 
     # regular line
     else:
@@ -29,7 +23,7 @@ def line_to_table_row(line: Line, rounding=4):
     return x1, x2, b
 
 
-def table_row_to_line(x1: float, x2: float, b: float, lims: [float, float]) -> Line:
+def table_row_to_line(x1: float, x2: float, b: float, lim: float) -> Line:
     tol = 1e-6
 
     # invalid row
@@ -38,30 +32,30 @@ def table_row_to_line(x1: float, x2: float, b: float, lims: [float, float]) -> L
 
     # horizontal line
     if abs(x1) < tol:
-        return Line(Point(0, -b / x2), Point(lims[0], (-b - x1 * lims[0]) / x2))
+        return Line(Point(0, -b / x2), Point(lim, (-b - x1 * lim) / x2))
 
     # vertical line
     if abs(x2) < tol:
-        return Line(Point(-b / x1, 0), Point((-b - x2 * lims[1]) / x1, lims[1]))
+        return Line(Point(-b / x1, 0), Point((-b - x2 * lim) / x1, lim))
 
     # regular line
     point1 = Point(0, -b / x2)
     point2 = Point(-b / x1, 0)
-    point3 = Point(lims[0], (-b - x1 * lims[0]) / x2)
-    point4 = Point((-b - x2 * lims[1]) / x1, lims[1])
+    point3 = Point(lim, (-b - x1 * lim) / x2)
+    point4 = Point((-b - x2 * lim) / x1, lim)
 
     # choose points such as
     # 1,2 ; 1,3 ; 1,4
-    if 0 <= point1.y <= lims[1]:
-        if 0 <= point2.x <= lims[0]:
+    if 0 <= point1.y <= lim:
+        if 0 <= point2.x <= lim:
             return Line(point1, point2)
-        if 0 <= point3.y <= lims[1]:
+        if 0 <= point3.y <= lim:
             return Line(point1, point3)
         return Line(point1, point4)
 
     # 2,3 ; 2,4
-    if 0 <= point2.x <= lims[0]:
-        if 0 <= point3.y <= lims[1]:
+    if 0 <= point2.x <= lim:
+        if 0 <= point3.y <= lim:
             return Line(point2, point3)
         return Line(point2, point4)
 
@@ -69,16 +63,15 @@ def table_row_to_line(x1: float, x2: float, b: float, lims: [float, float]) -> L
     return Line(point3, point4)
 
 
-def table_row_to_vector(x1: float, x2: float, b: float, lims: [float, float]) -> Line:
-    line = table_row_to_line(x1, x2, b, lims)
-
-    if abs(x1) < 1e-6:
-        sign = x2 * b
-    elif abs(x2) < 1e-6:
-        sign = x1 * b
-    else:
-        sign = x1 * x2 * b
-    return Line(line.end, line.begin) if sign < 0 else line
+def table_row_to_vector(x1: float, x2: float, b: float, lim: float) -> Line:
+    line = table_row_to_line(x1, x2, b, lim)
+    x11, x21, b1 = line_to_table_row(line)
+    if x11 * x1 < 0 or x21 * x2 < 0 or b1 * b < 0:
+        line = Line(
+            line.end,
+            line.begin
+        )
+    return line
 
 
 def shrink_line(line: Line, factor: float = 0.8) -> Line:
