@@ -23,7 +23,7 @@ echo "creating executable..."
 pyinstaller --onefile --noconsole src/main.py --name simplex
 
 # deactivate the virtual environment (optional, but good practice)
-echo "Deactivating virtual environment..."
+echo "Deactivating venv..."
 deactivate
 
 echo "Done! Executable is in the 'dist' folder."
