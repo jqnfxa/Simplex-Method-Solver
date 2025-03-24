@@ -1,31 +1,34 @@
-FROM python:3.10-windowsservercore-ltsc2022 as builder
+FROM python:3.10-windowsservercore-ltsc2022 AS builder
 
+# Set shell to PowerShell
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+# Install Python dependencies (may need tweaking based on your requirements.txt)
 WORKDIR /app
 
-COPY requirements.txt ./
-COPY src/ ./
+COPY requirements.txt .
+COPY src/ /app/src/
 
-# Install pyinstaller and dependencies (no venv needed on Windows in this case).
-RUN pip install --no-cache-dir -r requirements.txt
+# Create a virtual environment and install dependencies
+RUN python -m venv .venv ; \
+    . .venv/Scripts/activate ; \
+    pip install --no-cache-dir -r requirements.txt
+
+# Install pyinstaller
+RUN . .venv/Scripts/activate; pip install pyinstaller
 
 # Build the executable.
-RUN pyinstaller --onefile --noconsole --name simplex \
-    --add-data "src;src" \
-    --hidden-import PyQt5.sip \
-    src/main.py
-
-# Create an output directory
-RUN mkdir C:\\output
-
-# Copy the executable to the output directory.
-RUN copy dist\\simplex.exe C:\\output\\simplex.exe
+RUN . .venv/Scripts/activate ; \
+    pyinstaller --onefile --noconsole --name simplex `
+        --add-data "src;src" `
+        --hidden-import PyQt5.sip `
+        src/main.py
 
 # --- Second stage: Minimal runtime image ---
+FROM mcr.microsoft.com/windows/servercore:ltsc2022-amd64
 
-FROM mcr.microsoft.com/windows/nanoserver:ltsc2022
+# Copy the executable from the builder stage.
+COPY --from=builder /app/dist/simplex.exe /simplex.exe
 
-# Copy the executable.
-COPY --from=builder C:\\output\\simplex.exe C:\\simplex.exe
-
-# Set the entry point for direct execution
-ENTRYPOINT ["C:\\simplex.exe"]
+# Set entry point to use PowerShell
+ENTRYPOINT ["powershell", "/simplex.exe"]
