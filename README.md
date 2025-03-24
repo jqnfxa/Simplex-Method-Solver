@@ -33,11 +33,11 @@
 
 1.  **Запустите скрипт сборки**
 
-    *   **Windows:**  Запустить `install.bat`
+    *   **Windows:**  Запустить `build.bat`
     *   **Linux:**  Откройте терминал в папке проекта и выполните:
         ```bash
-        chmod +x install.sh
-        ./install.sh
+        chmod +x build.sh
+        ./build.sh
         ```
 
 2.  **Исполняемый файл** будет создан в папке `dist`.
