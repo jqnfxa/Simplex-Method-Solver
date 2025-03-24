@@ -21,7 +21,7 @@ jobs:
           chmod +x ./simplex-linux
 
       - name: Upload Linux Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v2
         with:
           name: simplex-linux
           path: ./simplex-linux
@@ -39,7 +39,7 @@ jobs:
           docker rm simplex-container
 
       - name: Upload Windows Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v2
         with:
           name: simplex-windows
           path: ./simplex-windows.exe
