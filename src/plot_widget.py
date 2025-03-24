@@ -1,5 +1,5 @@
 import math
-from PyQt5.QtWidgets import QVBoxLayout, QWidget
+from PyQt5.QtWidgets import QVBoxLayout, QWidget, QApplication
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 import numpy as np
 import time
@@ -59,7 +59,7 @@ class PlotWidget(QWidget):
         self.default_point_color = 'red'
         self.selected_line_color = 'green'
         self.gradient_line_color = 'red'
-        self.gradient_function_color = 'red'
+        self.gradient_function_color = 'blue'
         self.optimal_point_color = 'red'
         self.pptol = 0.15
         self.pltol = 0.15
@@ -68,7 +68,7 @@ class PlotWidget(QWidget):
         self.xmul = 0.1
         self.ymul = 0.1
 
-        self.figure = Figure(dpi=300)
+        self.figure = Figure(dpi=self.get_screen_dpi())
         self.canvas = FigureCanvas(self.figure)
         self.ax = self.figure.add_subplot(111)
         self.update_grid()
@@ -96,6 +96,15 @@ class PlotWidget(QWidget):
 
         # tolerance to determine if points are too close
         self.drag_tolerance = 0.5
+
+    def get_screen_dpi(self):
+        """Gets the screen DPI (dots per inch)."""
+        app = QApplication.instance()
+        if app is None:
+            app = QApplication([])
+        screen = app.primaryScreen()
+        dpi = screen.physicalDotsPerInch()
+        return dpi
 
     def update_grid(self):
         tl = 2 * self.__atom.lim / 100 # 2%
@@ -402,7 +411,7 @@ class PlotWidget(QWidget):
             self.first_point = None
             self.__atom.notify_observers()
 
-    def highlight_points(self, line, markersize=3):
+    def highlight_points(self, line, markersize=5):
         self.ax.plot(line.begin.x, line.begin.y, color=self.default_point_color, marker='.', markersize=markersize)
         self.ax.plot(line.end.x, line.end.y, color=self.default_point_color, marker='.', markersize=markersize)
 
@@ -420,7 +429,7 @@ class PlotWidget(QWidget):
 
         self.canvas.draw()
 
-    def draw_point(self, x, y, markersize=3):
+    def draw_point(self, x, y, markersize=5):
         self.ax.plot(x, y, color=self.optimal_point_color, marker='s', markersize=markersize)
 
     def draw_vector(self, x, y):
@@ -448,7 +457,7 @@ class PlotWidget(QWidget):
             linev = table_row_to_vector(*line_to_table_row(line, 2), self.__atom.lim)
 
             self.ax.plot([linev.begin.x, linev.end.x], [linev.begin.y, linev.end.y], color=self.colors[i], lw=1)
-            self.ax.plot([line.begin.x, line.end.x], [line.begin.y, line.end.y], color=self.colors[i], lw=2)
+            self.ax.plot([line.begin.x, line.end.x], [line.begin.y, line.end.y], color=self.colors[i], lw=3)
             self.highlight_points(line)
             self.draw_gradient(line)
 

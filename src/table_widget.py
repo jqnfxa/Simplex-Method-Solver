@@ -34,7 +34,6 @@ class TableWidget(QWidget):
         self.__atom = atom
         self.__header_row = ['x1', 'x2', '-b']
         self.__header_column = ['f']
-        self.__header_widths = [120, 120, 120]
 
         self.table_widget = QTableWidget()
         self.table_widget.setRowCount(1)
@@ -42,8 +41,6 @@ class TableWidget(QWidget):
         self.table_widget.setHorizontalHeaderLabels(self.__header_row)
         self.table_widget.setVerticalHeaderLabels(self.__header_column)
 
-        for i, width in enumerate(self.__header_widths):
-            self.table_widget.setColumnWidth(i, width)
         for i in range(2):
             self.table_widget.setItem(0, i, QTableWidgetItem('1'))
         item = QTableWidgetItem('0')
@@ -56,6 +53,28 @@ class TableWidget(QWidget):
         self.setLayout(layout)
 
         self.table_widget.itemChanged.connect(self.data_changed)  # type: ignore
+
+        self.update_column_widths()
+        self.table_widget.horizontalHeader().sectionResized.connect(self.update_column_widths)
+        self.resizeEvent = self.onResize
+
+    def onResize(self, event):
+        """
+        Event handler to update column widths when the table is resized
+        """
+        super().resizeEvent(event)
+        self.update_column_widths()
+
+    def update_column_widths(self):
+        """Calculates and sets column widths based on the available space."""
+        # Get the total width of the table (adjusting for scrollbars if present)
+        total_width = self.table_widget.viewport().width()
+
+        # Distribute width proportionally (e.g., 33% for each column).
+        column_width = total_width // self.table_widget.columnCount()
+
+        for i in range(self.table_widget.columnCount()):
+            self.table_widget.setColumnWidth(i, column_width)
 
     def update_labels(self):
         labels = [f"y{row}" for row in range(1, self.table_widget.rowCount())]
