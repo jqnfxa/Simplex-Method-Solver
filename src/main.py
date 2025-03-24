@@ -265,7 +265,7 @@ class MainWindow(QMainWindow):
                 'default_point_color': 'red',
                 'selected_line_color': 'green',
                 'gradient_line_color': 'red',
-                'gradient_function_color': 'blue',
+                'gradient_function_color': 'red',
                 'optimal_point_color': 'red',
             }
             with open(self.config_path, 'w') as configfile:
@@ -288,7 +288,7 @@ class MainWindow(QMainWindow):
                     'default_point_color': 'red',
                     'selected_line_color': 'green',
                     'gradient_line_color': 'red',
-                    'gradient_function_color': 'blue',
+                    'gradient_function_color': 'red',
                     'optimal_point_color': 'red',
                 }
                 self.config['settings'][option] = defaults[option]

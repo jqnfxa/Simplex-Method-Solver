@@ -59,7 +59,7 @@ class PlotWidget(QWidget):
         self.default_point_color = 'red'
         self.selected_line_color = 'green'
         self.gradient_line_color = 'red'
-        self.gradient_function_color = 'blue'
+        self.gradient_function_color = 'red'
         self.optimal_point_color = 'red'
         self.pptol = 0.15
         self.pltol = 0.15
