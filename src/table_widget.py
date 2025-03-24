@@ -1,6 +1,6 @@
 from PyQt5.QtCore import Qt, pyqtSlot
 from PyQt5.QtGui import QBrush, QColor
-from PyQt5.QtWidgets import QWidget, QTableWidget, QTableWidgetItem, QVBoxLayout
+from PyQt5.QtWidgets import QWidget, QTableWidget, QTableWidgetItem, QVBoxLayout, QMessageBox
 
 from atom import Atom, LineEntry
 from equations import table_row_to_vector, shrink_line
@@ -121,7 +121,7 @@ class TableWidget(QWidget):
         # disconnect update function
         self.table_widget.itemChanged.disconnect(self.data_changed)  # type: ignore
 
-        row_idx = self.table_widget.rowCount() - 2
+        row_idx = self.table_widget.rowCount() - 1
         self.table_widget.insertRow(row_idx)
         self.update_labels()
 
@@ -165,10 +165,13 @@ class TableWidget(QWidget):
 
         row = item.row()
         col = item.column()
-        new_value = item.text()
-        old_value = self.table_widget.item(row, col)
+        value = self.table_widget.item(row, col).text()
 
-        if old_value == new_value:
+        if not is_float(value):
+            QMessageBox.critical(self, "Ошибка", f"Элемент таблицы не является вещественным числом: {value}")
+            item = QTableWidgetItem('0')
+            item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsSelectable | Qt.ItemIsEditable)
+            self.table_widget.setItem(row, col, item)
             return
 
         # disconnect update function

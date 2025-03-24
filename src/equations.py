@@ -5,21 +5,11 @@ import numpy as np
 # Formalisation
 # row: x1 * x + x2 * y + b = 0
 def line_to_table_row(line: Line, rounding=4):
-    # vertical line
-    if line.is_vertical():
-        x1, x2, b = 1, 0, round(-line.begin.x, rounding)
-
-    # horizontal line
-    elif line.is_horizontal():
-        x1, x2, b = 0, 1, round(-line.begin.y, rounding)
-
-    # regular line
-    else:
-        x1 = line.begin.y - line.end.y
-        x2 = line.end.x - line.begin.x
-        b = line.begin.x * line.end.y - line.end.x * line.begin.y
-        x1, x2, b = round(x1, rounding), round(x2, rounding), round(b, rounding)
-
+    x1 = line.begin.y - line.end.y
+    x2 = line.end.x - line.begin.x
+    b = line.begin.x * line.end.y - line.end.x * line.begin.y
+    norm = max(1.0, max(abs(x1), abs(x2)))
+    x1, x2, b = round(x1 / norm, rounding), round(x2 / norm, rounding), round(b / norm, rounding)
     return x1, x2, b
 
 
@@ -32,11 +22,15 @@ def table_row_to_line(x1: float, x2: float, b: float, lim: float) -> Line:
 
     # horizontal line
     if abs(x1) < tol:
-        return Line(Point(0, -b / x2), Point(lim, (-b - x1 * lim) / x2))
+        p1 = Point(0, -b / x2)
+        p2 = Point(lim, (-b - x1 * lim) / x2)
+        return Line(p1, p2) if x2 > 0.0 else Line(p2, p1)
 
     # vertical line
     if abs(x2) < tol:
-        return Line(Point(-b / x1, 0), Point((-b - x2 * lim) / x1, lim))
+        p1 = Point(-b / x1, 0)
+        p2 = Point((-b - x2 * lim) / x1, lim)
+        return Line(p1, p2) if x1 < 0.0 else Line(p2, p1)
 
     # regular line
     point1 = Point(0, -b / x2)
@@ -65,9 +59,10 @@ def table_row_to_line(x1: float, x2: float, b: float, lim: float) -> Line:
 
 def table_row_to_vector(x1: float, x2: float, b: float, lim: float) -> Line:
     line = table_row_to_line(x1, x2, b, lim)
-    x11, x21, b1 = line_to_table_row(line)
-    if x11 * x1 < 0 or x21 * x2 < 0 or b1 * b < 0:
-        line = Line(
+    x12, x22, b2 = line_to_table_row(line)
+
+    if x12 * x1 < 0.0 or x22 * x2 < 0.0 or b2 * b < 0.0:
+        return Line(
             line.end,
             line.begin
         )
